@@ -11,7 +11,7 @@ website while still driving the page from live CRM data.
 
 ```
 HubSpot (Tickets) ──▶ GitHub Actions ──▶ node scripts/build.mjs ──▶ dist/ ──▶ GitHub Pages
-                        │  (Doppler injects HUBSPOT_TOKEN)
+                        │  (Doppler injects HUBSPOT_SERVICE_KEY)
                         └─ runs on push to main, daily cron, or manual dispatch
 ```
 
@@ -74,7 +74,7 @@ doppler setup               # select project + config (see doppler.yaml)
 doppler run -- npm run build
 ```
 
-When `HUBSPOT_TOKEN` is absent, the build falls back to
+When `HUBSPOT_SERVICE_KEY` is absent, the build falls back to
 [`mock/tickets.sample.json`](mock/tickets.sample.json) so the site is always
 buildable and previewable.
 
@@ -85,8 +85,9 @@ buildable and previewable.
 1. **HubSpot** — create a Private App with the `crm.objects.tickets.read` scope
    and copy its access token.
 2. **Doppler** — in project `disputes-matt-schober-com` / config `prd`, add a
-   secret `HUBSPOT_TOKEN` with that value. Add any `SITE_*` / `PUBLISH_*`
-   overrides here too. Generate a **service token** for the config.
+   secret `HUBSPOT_SERVICE_KEY` with that value. Add any `SITE_*` / `PUBLISH_*`
+   overrides here too. Generate a **service token** for the config (this is the
+   `DOPPLER_TOKEN` used by CI — distinct from the HubSpot key).
 3. **GitHub** — add the Doppler service token as a repository secret named
    `DOPPLER_TOKEN` (Settings → Secrets and variables → Actions).
 4. **GitHub Pages** — Settings → Pages → **Source: GitHub Actions**. The custom

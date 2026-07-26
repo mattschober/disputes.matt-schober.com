@@ -98,8 +98,8 @@ async function copyStatic() {
 async function main() {
   const live = hasToken();
   console.log(live
-    ? '🔐 HUBSPOT_TOKEN detected — fetching live data from HubSpot.'
-    : 'ℹ️  No HUBSPOT_TOKEN — building from mock/tickets.sample.json.');
+    ? '🔐 HUBSPOT_SERVICE_KEY detected — fetching live data from HubSpot.'
+    : 'ℹ️  No HUBSPOT_SERVICE_KEY — building from mock/tickets.sample.json.');
 
   let tickets;
   let stageMap = null;

@@ -19,8 +19,10 @@ export const config = {
   // --- HubSpot ---------------------------------------------------------------
   hubspot: {
     // Private App access token. Provided via Doppler -> env in CI.
-    // When absent, the build falls back to mock/tickets.sample.json.
-    token: str('HUBSPOT_TOKEN', ''),
+    // Primary name is HUBSPOT_SERVICE_KEY (the Doppler secret); HUBSPOT_TOKEN
+    // is accepted as a fallback. When absent, the build falls back to
+    // mock/tickets.sample.json.
+    token: str('HUBSPOT_SERVICE_KEY', '') || str('HUBSPOT_TOKEN', ''),
     baseUrl: str('HUBSPOT_BASE_URL', 'https://api.hubapi.com'),
 
     // Legal disputes are modelled on HubSpot Tickets (object 0-5).
