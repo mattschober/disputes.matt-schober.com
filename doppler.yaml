@@ -1,0 +1,7 @@
+# Doppler project/config mapping for local development.
+# Run `doppler setup` once, then `doppler run -- npm run build`.
+# In CI the Doppler *service token* (secrets.DOPPLER_TOKEN) already scopes to a
+# project + config, so this file is only used for local convenience.
+setup:
+  project: disputes-matt-schober-com
+  config: prd
