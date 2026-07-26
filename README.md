@@ -1,2 +1,120 @@
 # disputes.matt-schober.com
-This is the portal for upcoming legal 
+
+Public **Legal Disputes Portal** for the Matt Schober brand — a transparent,
+static record of legal matters and disputes.
+
+The site is generated **at build time** from HubSpot and published to GitHub
+Pages. There is **no client-side API access**: the HubSpot token stays on the
+build server (injected by [Doppler](https://www.doppler.com/)), and the browser
+only ever sees pre-rendered HTML. This keeps a private API token off a public
+website while still driving the page from live CRM data.
+
+```
+HubSpot (Tickets) ──▶ GitHub Actions ──▶ node scripts/build.mjs ──▶ dist/ ──▶ GitHub Pages
+                        │  (Doppler injects HUBSPOT_SERVICE_KEY)
+                        └─ runs on push to main, daily cron, or manual dispatch
+```
+
+---
+
+## ⚠️ This is a PUBLIC website — read before adding real matters
+
+`disputes.matt-schober.com` is served publicly. Anything the build publishes is
+world-readable and may be cached or indexed by search engines. HubSpot tickets
+routinely contain personal names and other PII in their subject/description.
+
+**Controls built in to limit exposure:**
+
+| Control | Env var | Default | Effect |
+| --- | --- | --- | --- |
+| Publication marker gate | `PUBLISH_REQUIRE_MARKER` | `false` | When `true`, only tickets whose marker property equals the marker value are published. Everything else stays private. |
+| Marker property / value | `PUBLISH_MARKER_PROPERTY` / `PUBLISH_MARKER_VALUE` | `publish_to_portal` / `true` | Which HubSpot property opts a ticket in. |
+| Publish descriptions | `PUBLISH_DESCRIPTIONS` | `true` | Set `false` to omit free-text descriptions (which most often carry PII). |
+| Public reference numbers | `REFERENCE_PREFIX` | `MS` | Cards show a derived reference (e.g. `MS-636001`), never the raw HubSpot record id. |
+
+**Recommended before go-live:** create a boolean/checkbox property
+`publish_to_portal` on Tickets in HubSpot, set `PUBLISH_REQUIRE_MARKER=true` in
+Doppler, and check that box only on matters you intend to publish. Until then
+the portal will publish **every** ticket in the configured pipeline.
+
+---
+
+## Data model
+
+Legal disputes are modelled on HubSpot **Tickets** (object `0-5`) in the
+**Support Pipeline** (`pipeline 0`) of portal `244055979`. Each ticket becomes a
+"matter" card:
+
+| Portal card | HubSpot property |
+| --- | --- |
+| Status badge | `hs_pipeline_stage` (live stage labels fetched at build time) |
+| Title | `subject` |
+| Description | `content` (HTML stripped to plain text) |
+| Priority | `hs_ticket_priority` |
+| Category | `hs_ticket_category` |
+| Filed | `createdate` |
+| Last Updated | `hs_lastmodifieddate` |
+
+Stage → colour mapping is semantic (`open` / `active` / `waiting` / `closed`) so
+it keeps working if you rename or add pipeline stages.
+
+---
+
+## Local development
+
+No dependencies are required to build (Node ≥ 20, native `fetch`).
+
+```bash
+# Build from sample data (no credentials needed) and preview:
+node scripts/build.mjs      # or: npm run build
+npm run serve               # http://localhost:8080
+
+# Build from live HubSpot data via Doppler:
+doppler setup               # select project + config (see doppler.yaml)
+doppler run -- npm run build
+```
+
+When `HUBSPOT_SERVICE_KEY` is absent, the build falls back to
+[`mock/tickets.sample.json`](mock/tickets.sample.json) so the site is always
+buildable and previewable.
+
+---
+
+## Deployment setup (one-time)
+
+1. **HubSpot** — create a Private App with the `crm.objects.tickets.read` scope
+   and copy its access token.
+2. **Doppler** — in project `disputes-matt-schober-com` / config `prd`, add a
+   secret `HUBSPOT_SERVICE_KEY` with that value. Add any `SITE_*` / `PUBLISH_*`
+   overrides here too. Generate a **service token** for the config (this is the
+   `DOPPLER_TOKEN` used by CI — distinct from the HubSpot key).
+3. **GitHub** — add the Doppler service token as a repository secret named
+   `DOPPLER_TOKEN` (Settings → Secrets and variables → Actions).
+4. **GitHub Pages** — Settings → Pages → **Source: GitHub Actions**. The custom
+   domain is set via [`CNAME`](CNAME) and preserved on every build.
+
+After that, [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml)
+rebuilds and publishes on every push to `main`, once daily (cron), or on manual
+dispatch. Pull requests build for validation but do not deploy.
+
+---
+
+## Project layout
+
+```
+scripts/
+  config.mjs     # all portal/site configuration + env overrides
+  hubspot.mjs    # HubSpot fetch (tickets + pipeline stages), mock fallback
+  build.mjs      # transform tickets -> disputes, render, emit dist/
+  render.mjs     # HTML template
+  serve.mjs      # local static preview server
+src/
+  styles.css     # design system (light/dark, responsive)
+  app.js         # client-side search + status filtering
+mock/
+  tickets.sample.json
+.github/workflows/deploy.yml
+CNAME
+```
+
+Build output (`dist/`) is generated by CI and is **not** committed.

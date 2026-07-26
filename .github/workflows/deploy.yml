@@ -1,0 +1,68 @@
+name: Build & Deploy Disputes Portal
+
+# Regenerates the static site from HubSpot and publishes it to GitHub Pages.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+  # Refresh the public record daily so status changes in HubSpot appear
+  # without a manual push. Adjust or remove as needed.
+  schedule:
+    - cron: '17 6 * * *'
+
+# Allow the workflow to publish to GitHub Pages.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; let an in-progress run finish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # Installs the `doppler` CLI so secrets can be injected at build time.
+      - name: Install Doppler CLI
+        uses: dopplerhq/cli-action@v3
+
+      - name: Build site (Doppler injects HUBSPOT_SERVICE_KEY)
+        env:
+          DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+        run: |
+          if [ -n "$DOPPLER_TOKEN" ]; then
+            echo "Building with live HubSpot data via Doppler."
+            doppler run -- node scripts/build.mjs
+          else
+            echo "::warning::DOPPLER_TOKEN not set — building from sample data."
+            node scripts/build.mjs
+          fi
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    # Publish only for real pushes/schedules/manual runs — not for PR previews.
+    if: github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

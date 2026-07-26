@@ -1,0 +1,16 @@
+{
+  "name": "disputes-matt-schober-com",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Public legal disputes portal for the matt-schober brand. Static site generated from HubSpot at build time.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "clean": "rm -rf dist",
+    "serve": "node scripts/serve.mjs"
+  },
+  "license": "UNLICENSED"
+}
