@@ -1,0 +1,103 @@
+{
+  "_comment": "Sample data mirroring the HubSpot CRM Search API response for DEALS (object 0-3) in the Disputes pipeline. Used by scripts/build.mjs when no HubSpot token is set, so the site can be built and previewed without live credentials. All parties below are fictional placeholders — real matters come from HubSpot at build time in CI and are never committed to this repo.",
+  "results": [
+    {
+      "id": "195155681101",
+      "properties": {
+        "hs_object_id": "195155681101",
+        "dealname": "Sample Holdings LLC vs. Example Contracting Co.",
+        "description": "Placeholder record. Descriptions are withheld from the public site unless PUBLISH_DESCRIPTIONS=true.",
+        "pipeline": "default",
+        "dealstage": "presentationscheduled",
+        "amount": "481000",
+        "createdate": "2026-05-14T09:20:00.000Z",
+        "closedate": "",
+        "hs_lastmodifieddate": "2026-07-10T16:05:00.000Z"
+      }
+    },
+    {
+      "id": "195155681102",
+      "properties": {
+        "hs_object_id": "195155681102",
+        "dealname": "Doe Enterprises vs. Placeholder Services Inc.",
+        "description": "Placeholder record.",
+        "pipeline": "default",
+        "dealstage": "decisionmakerboughtin",
+        "amount": "7117.48",
+        "createdate": "2026-03-02T13:00:00.000Z",
+        "closedate": "",
+        "hs_lastmodifieddate": "2026-07-18T11:45:00.000Z"
+      }
+    },
+    {
+      "id": "195155681103",
+      "properties": {
+        "hs_object_id": "195155681103",
+        "dealname": "Example Party vs. Sample Property Group",
+        "description": "Placeholder record.",
+        "pipeline": "default",
+        "dealstage": "qualifiedtobuy",
+        "amount": "2892",
+        "createdate": "2026-02-11T08:30:00.000Z",
+        "closedate": "",
+        "hs_lastmodifieddate": "2026-06-30T09:15:00.000Z"
+      }
+    },
+    {
+      "id": "195155681104",
+      "properties": {
+        "hs_object_id": "195155681104",
+        "dealname": "Sample Tenant Matter — Fixture Dispute",
+        "description": "Placeholder record.",
+        "pipeline": "default",
+        "dealstage": "appointmentscheduled",
+        "amount": "8045",
+        "createdate": "2026-01-08T15:45:00.000Z",
+        "closedate": "",
+        "hs_lastmodifieddate": "2026-07-02T10:00:00.000Z"
+      }
+    },
+    {
+      "id": "195155681105",
+      "properties": {
+        "hs_object_id": "195155681105",
+        "dealname": "Placeholder Vendor Co. vs. Sample Holdings LLC",
+        "description": "Placeholder record.",
+        "pipeline": "default",
+        "dealstage": "contractsent",
+        "amount": "2402",
+        "createdate": "2025-12-19T11:05:00.000Z",
+        "closedate": "",
+        "hs_lastmodifieddate": "2026-07-20T14:20:00.000Z"
+      }
+    },
+    {
+      "id": "195155681106",
+      "properties": {
+        "hs_object_id": "195155681106",
+        "dealname": "Sample Gym vs. Example Member",
+        "description": "Placeholder record.",
+        "pipeline": "default",
+        "dealstage": "closedwon",
+        "amount": "1885",
+        "createdate": "2025-11-15T04:39:19.158Z",
+        "closedate": "2026-04-01T00:00:00.000Z",
+        "hs_lastmodifieddate": "2026-07-20T21:16:55.358Z"
+      }
+    },
+    {
+      "id": "195155681107",
+      "properties": {
+        "hs_object_id": "195155681107",
+        "dealname": "Example Claimant vs. Sample Institution",
+        "description": "Placeholder record.",
+        "pipeline": "default",
+        "dealstage": "closedlost",
+        "amount": "140000",
+        "createdate": "2025-10-22T00:47:11.857Z",
+        "closedate": "2026-02-15T00:00:00.000Z",
+        "hs_lastmodifieddate": "2026-07-17T23:13:19.825Z"
+      }
+    }
+  ]
+}

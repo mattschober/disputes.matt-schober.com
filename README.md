@@ -10,9 +10,9 @@ only ever sees pre-rendered HTML. This keeps a private API token off a public
 website while still driving the page from live CRM data.
 
 ```
-HubSpot (Tickets) ──▶ GitHub Actions ──▶ node scripts/build.mjs ──▶ dist/ ──▶ GitHub Pages
-                        │  (Doppler injects HUBSPOT_SERVICE_KEY)
-                        └─ runs on push to main, daily cron, or manual dispatch
+HubSpot (Deals ▸ Disputes pipeline) ──▶ GitHub Actions ──▶ node scripts/build.mjs ──▶ dist/ ──▶ Pages
+                                          │  (Doppler injects HUBSPOT_SERVICE_KEY)
+                                          └─ runs on push to main, daily cron, or manual dispatch
 ```
 
 ---
@@ -20,43 +20,57 @@ HubSpot (Tickets) ──▶ GitHub Actions ──▶ node scripts/build.mjs ─�
 ## ⚠️ This is a PUBLIC website — read before adding real matters
 
 `disputes.matt-schober.com` is served publicly. Anything the build publishes is
-world-readable and may be cached or indexed by search engines. HubSpot tickets
-routinely contain personal names and other PII in their subject/description.
+world-readable and may be cached or indexed by search engines long after it is
+removed here. Matters in this portal are captioned `Party A vs. Party B` and
+**name private individuals**, so treat every publication default as a decision
+with real consequences for people who did not opt in.
 
 **Controls built in to limit exposure:**
 
 | Control | Env var | Default | Effect |
 | --- | --- | --- | --- |
-| Publication marker gate | `PUBLISH_REQUIRE_MARKER` | `false` | When `true`, only tickets whose marker property equals the marker value are published. Everything else stays private. |
-| Marker property / value | `PUBLISH_MARKER_PROPERTY` / `PUBLISH_MARKER_VALUE` | `publish_to_portal` / `true` | Which HubSpot property opts a ticket in. |
-| Publish descriptions | `PUBLISH_DESCRIPTIONS` | `true` | Set `false` to omit free-text descriptions (which most often carry PII). |
-| Public reference numbers | `REFERENCE_PREFIX` | `MS` | Cards show a derived reference (e.g. `MS-636001`), never the raw HubSpot record id. |
+| Pipeline restriction | *(code)* | on | **Primary gate.** Only deals in the Disputes pipeline are eligible. Enforced server-side in the HubSpot query *and* again locally in `enforcePipeline()`, so the consulting pipeline can never reach the site even if the query filter breaks. |
+| Publication marker gate | `PUBLISH_REQUIRE_MARKER` | `false` | Optional second gate. When `true`, only deals whose marker property equals the marker value are published. |
+| Marker property / value | `PUBLISH_MARKER_PROPERTY` / `PUBLISH_MARKER_VALUE` | `publish_to_portal` / `true` | Which HubSpot property opts a deal in. The property must exist on Deals first — filtering on a missing property makes the Search API return `400`. |
+| Publish descriptions | `PUBLISH_DESCRIPTIONS` | `false` | Deal descriptions here are internal working notes, not public copy. Off by default. |
+| Publish amounts | `PUBLISH_AMOUNTS` | `false` | Off by default — a dollar figure next to a name reads as a judgment owed. |
+| Public reference numbers | `REFERENCE_PREFIX` | `MS` | Cards show a derived reference (e.g. `MS-681101`), never the raw HubSpot record id. |
 
-**Recommended before go-live:** create a boolean/checkbox property
-`publish_to_portal` on Tickets in HubSpot, set `PUBLISH_REQUIRE_MARKER=true` in
-Doppler, and check that box only on matters you intend to publish. Until then
-the portal will publish **every** ticket in the configured pipeline.
+`Closed Won` and `Closed Lost` are both relabelled to a neutral **Closed** on the
+public page; the win/loss distinction stays in HubSpot. Badge colour still
+derives from the real stage.
 
 ---
 
 ## Data model
 
-Legal disputes are modelled on HubSpot **Tickets** (object `0-5`) in the
-**Support Pipeline** (`pipeline 0`) of portal `244055979`. Each ticket becomes a
-"matter" card:
+Disputes are modelled on HubSpot **Deals** (object `0-3`). A deal is
+"classified as a dispute" by living in the **Disputes** pipeline (id `default`)
+of portal `244055979`. The portal's other pipeline —
+`1310445295`, "Consulting Project Opportunities" — holds recruiting and
+consulting leads and is **never** published.
 
 | Portal card | HubSpot property |
 | --- | --- |
-| Status badge | `hs_pipeline_stage` (live stage labels fetched at build time) |
-| Title | `subject` |
-| Description | `content` (HTML stripped to plain text) |
-| Priority | `hs_ticket_priority` |
-| Category | `hs_ticket_category` |
-| Filed | `createdate` |
+| Status badge | `dealstage` (live stage labels fetched at build time) |
+| Title | `dealname` (the case caption) |
+| Description | `description`, HTML stripped — withheld unless `PUBLISH_DESCRIPTIONS=true` |
+| Amount at Issue | `amount` — withheld unless `PUBLISH_AMOUNTS=true` |
+| Opened | `createdate` (when the record was created in the CRM, which may differ from the filing date) |
 | Last Updated | `hs_lastmodifieddate` |
+| Closed | `closedate`, shown only on closed matters |
 
-Stage → colour mapping is semantic (`open` / `active` / `waiting` / `closed`) so
-it keeps working if you rename or add pipeline stages.
+Disputes-pipeline stages map to semantic states that drive badge colour:
+
+| Stage | State |
+| --- | --- |
+| Dispute Identified | `open` |
+| Communications Sent · Court Active · Post Court | `active` |
+| Hold | `waiting` |
+| Closed Won · Closed Lost | `closed` |
+
+Renaming or adding stages keeps working: the build falls back to matching stage
+labels by keyword (`stateForStageLabel`).
 
 ---
 
@@ -75,15 +89,22 @@ doppler run -- npm run build
 ```
 
 When `HUBSPOT_SERVICE_KEY` is absent, the build falls back to
-[`mock/tickets.sample.json`](mock/tickets.sample.json) so the site is always
-buildable and previewable.
+[`mock/disputes.sample.json`](mock/disputes.sample.json) so the site is always
+buildable and previewable. Every party in that file is fictional — real matters
+live only in HubSpot and are never committed to this repo.
+
+In CI, the sample-data fallback is allowed **only on pull requests** (which never
+deploy). On `main`, cron, or manual runs a missing `DOPPLER_TOKEN` fails the
+build rather than publishing placeholder matters to the live site.
 
 ---
 
 ## Deployment setup (one-time)
 
-1. **HubSpot** — create a Private App with the `crm.objects.tickets.read` scope
-   and copy its access token.
+1. **HubSpot** — create a Private App with the `crm.objects.deals.read` scope
+   (add `crm.pipelines.read` for live stage labels) and copy its access token.
+   It must be a **Private App token from portal 244055979** — a developer API
+   key cannot read CRM records and will fail with `MISSING_SCOPES`.
 2. **Doppler** — in project `disputes-matt-schober-com` / config `prd`, add a
    secret `HUBSPOT_SERVICE_KEY` with that value. Add any `SITE_*` / `PUBLISH_*`
    overrides here too. Generate a **service token** for the config (this is the
@@ -99,20 +120,45 @@ dispatch. Pull requests build for validation but do not deploy.
 
 ---
 
+## Troubleshooting
+
+**`403 Forbidden` / `MISSING_SCOPES` — "The scope needed for this API call isn't
+available for public use."**
+
+The token in `HUBSPOT_SERVICE_KEY` cannot read the CRM object being requested.
+This is a credentials problem, not a code problem — no repo change fixes it.
+Check, in order:
+
+1. The token is a **Private App access token** from portal `244055979`, not a
+   developer API key and not a token from another portal.
+2. The Private App grants `crm.objects.deals.read`. Changing scopes in HubSpot
+   **regenerates the token** — copy the new value into Doppler.
+3. Doppler's `prd` config holds the updated `HUBSPOT_SERVICE_KEY`, and the
+   `DOPPLER_TOKEN` repo secret is a service token scoped to that config.
+
+The build fails loudly and the deploy job is skipped, so the previously
+published site stays up untouched while this is being fixed.
+
+**`400 Bad Request` on the search call.** Usually `PUBLISH_REQUIRE_MARKER=true`
+while the `publish_to_portal` property does not exist on Deals in HubSpot.
+Create the property first, or turn the flag off.
+
+---
+
 ## Project layout
 
 ```
 scripts/
   config.mjs     # all portal/site configuration + env overrides
-  hubspot.mjs    # HubSpot fetch (tickets + pipeline stages), mock fallback
-  build.mjs      # transform tickets -> disputes, render, emit dist/
+  hubspot.mjs    # HubSpot fetch (deals + pipeline stages), pipeline guard, mock fallback
+  build.mjs      # transform deals -> disputes, render, emit dist/
   render.mjs     # HTML template
   serve.mjs      # local static preview server
 src/
   styles.css     # design system (light/dark, responsive)
   app.js         # client-side search + status filtering
 mock/
-  tickets.sample.json
+  disputes.sample.json
 .github/workflows/deploy.yml
 CNAME
 ```
