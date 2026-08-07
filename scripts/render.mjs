@@ -40,9 +40,18 @@ function disputeCard(d) {
   const desc = d.description
     ? `<p class="matter__desc">${escapeHtml(d.description)}</p>`
     : '';
+  // Amounts and closing dates are optional, so the meta grid is assembled from
+  // whatever this matter actually has rather than padded with em dashes.
+  const meta = [
+    `<div><dt>Opened</dt><dd>${fmtDate(d.filed)}</dd></div>`,
+    `<div><dt>Last Updated</dt><dd>${fmtDate(d.updated)}</dd></div>`,
+  ];
+  if (d.closed) meta.push(`<div><dt>Closed</dt><dd>${fmtDate(d.closed)}</dd></div>`);
+  if (d.amount) meta.push(`<div><dt>Amount at Issue</dt><dd>${escapeHtml(d.amount)}</dd></div>`);
+
   return `
         <article class="matter" data-state="${escapeHtml(d.state)}" data-search="${escapeHtml(
-          `${d.reference} ${d.subject} ${d.category} ${d.statusLabel}`.toLowerCase()
+          `${d.reference} ${d.subject} ${d.statusLabel}`.toLowerCase()
         )}">
           <header class="matter__head">
             <span class="matter__ref">${escapeHtml(d.reference)}</span>
@@ -51,10 +60,7 @@ function disputeCard(d) {
           <h3 class="matter__title">${escapeHtml(d.subject)}</h3>
           ${desc}
           <dl class="matter__meta">
-            <div><dt>Filed</dt><dd>${fmtDate(d.filed)}</dd></div>
-            <div><dt>Last Updated</dt><dd>${fmtDate(d.updated)}</dd></div>
-            <div><dt>Category</dt><dd>${escapeHtml(d.category)}</dd></div>
-            <div><dt>Priority</dt><dd>${escapeHtml(d.priority)}</dd></div>
+            ${meta.join('\n            ')}
           </dl>
         </article>`;
 }
@@ -106,13 +112,13 @@ export function renderPage(disputes, meta) {
     <section class="controls" aria-label="Filter matters">
       <label class="search">
         <span class="search__label">Search matters</span>
-        <input type="search" id="search" placeholder="Search by reference, subject, or category…" autocomplete="off" />
+        <input type="search" id="search" placeholder="Search by reference, party, or status…" autocomplete="off" />
       </label>
       <div class="filters" role="group" aria-label="Filter by status">
         <button class="filter is-active" data-filter="all" type="button">All</button>
-        <button class="filter" data-filter="open" type="button">Filed</button>
-        <button class="filter" data-filter="active" type="button">Under Review</button>
-        <button class="filter" data-filter="waiting" type="button">Awaiting Response</button>
+        <button class="filter" data-filter="open" type="button">Identified</button>
+        <button class="filter" data-filter="active" type="button">In Progress</button>
+        <button class="filter" data-filter="waiting" type="button">On Hold</button>
         <button class="filter" data-filter="closed" type="button">Closed</button>
       </div>
     </section>
@@ -129,8 +135,12 @@ ${cards}
         <strong>Disclaimer.</strong> The information on this page is provided for
         general transparency and record-keeping purposes only. It does not
         constitute legal advice, an admission, or a complete account of any
-        matter, and nothing here creates an attorney–client relationship. For
-        inquiries regarding a specific matter, contact
+        matter, and nothing here creates an attorney–client relationship.
+        Listing a matter is <strong>not</strong> an allegation of wrongdoing by
+        any party, and a status of &ldquo;Closed&rdquo; implies no finding of
+        liability or fault. Statuses reflect internal record-keeping and may lag
+        the actual posture of a matter. For inquiries regarding a specific
+        matter, or to request correction or removal of an entry, contact
         <a href="mailto:${escapeHtml(site.contactEmail)}">${escapeHtml(site.contactEmail)}</a>.
       </p>
       <p class="meta-line">

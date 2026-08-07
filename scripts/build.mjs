@@ -4,7 +4,8 @@
 //   node scripts/build.mjs
 //
 // In CI this is run as `doppler run -- node scripts/build.mjs`, so Doppler
-// injects HUBSPOT_TOKEN (and any SITE_* overrides) into the environment.
+// injects HUBSPOT_SERVICE_KEY (and any SITE_*/PUBLISH_* overrides) into the
+// environment.
 
 import { mkdir, writeFile, copyFile, readdir } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -14,14 +15,13 @@ import { dirname, join } from 'node:path';
 import {
   config,
   FALLBACK_STAGES,
-  PRIORITY_LABELS,
-  CATEGORY_LABELS,
+  STAGE_LABEL_OVERRIDES,
   stateForStageLabel,
 } from './config.mjs';
 import {
-  fetchTickets,
+  fetchDisputeDeals,
   fetchPipelineStages,
-  loadMockTickets,
+  loadMockDeals,
   hasToken,
 } from './hubspot.mjs';
 import { renderPage } from './render.mjs';
@@ -50,38 +50,50 @@ function referenceFor(id) {
   return `${config.publish.referencePrefix}-${tail}`;
 }
 
-/** Map a HubSpot ticket into the public dispute shape used by the template. */
-function toDispute(ticket, stageMap) {
-  const p = ticket.properties || {};
-  const stageId = p.hs_pipeline_stage;
+/** Format a deal amount as a plain USD figure, or null when not publishable. */
+function amountFor(raw) {
+  if (!config.publish.includeAmounts) return null;
+  const n = Number(raw);
+  if (!raw || Number.isNaN(n) || n <= 0) return null;
+  return n.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    maximumFractionDigits: 0,
+  });
+}
 
-  let statusLabel;
-  let state;
+/** Resolve a stage id to its public label and semantic state. */
+function stageFor(stageId, stageMap) {
+  const override = STAGE_LABEL_OVERRIDES[stageId];
+
   if (stageMap && stageMap[stageId]) {
-    statusLabel = stageMap[stageId].label;
-    state = stateForStageLabel(statusLabel);
-  } else if (FALLBACK_STAGES[stageId]) {
-    statusLabel = FALLBACK_STAGES[stageId].label;
-    state = FALLBACK_STAGES[stageId].state;
-  } else {
-    statusLabel = 'On Record';
-    state = 'open';
+    const label = override || stageMap[stageId].label;
+    // State always derives from HubSpot's real label, not the public override,
+    // so "Closed Won" still colours as closed after being relabelled.
+    return { statusLabel: label, state: stateForStageLabel(stageMap[stageId].label) };
   }
+  if (FALLBACK_STAGES[stageId]) {
+    const { label, state } = FALLBACK_STAGES[stageId];
+    return { statusLabel: override || label, state };
+  }
+  return { statusLabel: 'On Record', state: 'open' };
+}
 
-  const description = config.publish.includeDescriptions
-    ? toPlainText(p.content || '')
-    : '';
+/** Map a HubSpot deal into the public dispute shape used by the template. */
+function toDispute(deal, stageMap) {
+  const p = deal.properties || {};
+  const { statusLabel, state } = stageFor(p.dealstage, stageMap);
 
   return {
-    reference: referenceFor(p.hs_object_id || ticket.id),
-    subject: p.subject || 'Untitled Matter',
-    description,
+    reference: referenceFor(p.hs_object_id || deal.id),
+    subject: p.dealname || 'Untitled Matter',
+    description: config.publish.includeDescriptions ? toPlainText(p.description || '') : '',
     statusLabel,
     state,
-    priority: PRIORITY_LABELS[p.hs_ticket_priority] || '—',
-    category: CATEGORY_LABELS[p.hs_ticket_category] || 'General',
+    amount: amountFor(p.amount),
     filed: p.createdate || null,
     updated: p.hs_lastmodifieddate || null,
+    closed: state === 'closed' ? p.closedate || null : null,
   };
 }
 
@@ -99,18 +111,21 @@ async function main() {
   const live = hasToken();
   console.log(live
     ? '🔐 HUBSPOT_SERVICE_KEY detected — fetching live data from HubSpot.'
-    : 'ℹ️  No HUBSPOT_SERVICE_KEY — building from mock/tickets.sample.json.');
+    : 'ℹ️  No HUBSPOT_SERVICE_KEY — building from mock/disputes.sample.json.');
 
-  let tickets;
+  let deals;
   let stageMap = null;
   if (live) {
-    [tickets, stageMap] = await Promise.all([fetchTickets(), fetchPipelineStages()]);
+    // Stage labels are optional, so fetch them first and let a scope failure
+    // there degrade to built-in labels rather than racing the required call.
+    stageMap = await fetchPipelineStages();
+    deals = await fetchDisputeDeals();
   } else {
-    tickets = await loadMockTickets();
+    deals = await loadMockDeals();
   }
 
-  const disputes = tickets
-    .map((t) => toDispute(t, stageMap))
+  const disputes = deals
+    .map((d) => toDispute(d, stageMap))
     .sort((a, b) => new Date(b.filed || 0) - new Date(a.filed || 0));
 
   const meta = {
@@ -129,10 +144,15 @@ async function main() {
     'utf8'
   );
 
-  console.log(`✅ Built ${disputes.length} matter(s) → ${DIST}`);
+  console.log(
+    `✅ Built ${disputes.length} matter(s) → ${DIST}` +
+      `\n   descriptions: ${config.publish.includeDescriptions ? 'published' : 'withheld'}` +
+      `, amounts: ${config.publish.includeAmounts ? 'published' : 'withheld'}`
+  );
 }
 
 main().catch((err) => {
-  console.error('❌ Build failed:', err.message);
+  console.error(`❌ Build failed: ${err.message}`);
+  // Exit non-zero so the deploy job is skipped and the last good site stays up.
   process.exit(1);
 });

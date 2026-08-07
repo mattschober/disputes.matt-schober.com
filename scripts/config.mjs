@@ -21,49 +21,61 @@ export const config = {
     // Private App access token. Provided via Doppler -> env in CI.
     // Primary name is HUBSPOT_SERVICE_KEY (the Doppler secret); HUBSPOT_TOKEN
     // is accepted as a fallback. When absent, the build falls back to
-    // mock/tickets.sample.json.
+    // mock/disputes.sample.json.
     token: str('HUBSPOT_SERVICE_KEY', '') || str('HUBSPOT_TOKEN', ''),
     baseUrl: str('HUBSPOT_BASE_URL', 'https://api.hubapi.com'),
 
-    // Legal disputes are modelled on HubSpot Tickets (object 0-5).
-    objectType: 'tickets',
+    // Disputes are modelled on HubSpot Deals (object 0-3), NOT tickets. A deal
+    // is "classified as a dispute" by living in the Disputes pipeline.
+    objectType: 'deals',
 
-    // Support Pipeline ("0") in portal 244055979. Override with HUBSPOT_PIPELINE_ID.
-    pipelineId: str('HUBSPOT_PIPELINE_ID', '0'),
+    // The "Disputes" pipeline in portal 244055979. HubSpot's first deal
+    // pipeline keeps the literal id "default" even after being renamed.
+    //
+    // The OTHER pipeline in this portal (1310445295, "Consulting Project
+    // Opportunities") holds recruiting leads and must never be published.
+    // Publication is restricted to this id both server-side and again locally
+    // in hubspot.mjs. Override with HUBSPOT_PIPELINE_ID.
+    pipelineId: str('HUBSPOT_PIPELINE_ID', 'default'),
 
-    // Ticket properties pulled from HubSpot.
+    // Deal properties pulled from HubSpot.
     properties: [
       'hs_object_id',
-      'subject',
-      'content',
-      'hs_pipeline',
-      'hs_pipeline_stage',
-      'hs_ticket_priority',
-      'hs_ticket_category',
+      'dealname',
+      'description',
+      'pipeline',
+      'dealstage',
+      'amount',
       'createdate',
+      'closedate',
       'hs_lastmodifieddate',
     ],
   },
 
   // --- Publication control (IMPORTANT: this is a PUBLIC website) --------------
   publish: {
-    // Only tickets in this pipeline are ever considered for publication.
+    // Only deals in the Disputes pipeline are ever considered for publication.
+    // This is the primary safety gate: it is what "classified as a dispute"
+    // means, and it keeps the consulting pipeline entirely off the site.
     restrictToPipeline: true,
 
-    // SAFETY GATE. When true, ONLY tickets whose `markerProperty` equals
-    // `markerValue` are published. This lets you keep most CRM tickets private
-    // and explicitly opt individual matters into the public portal.
-    //
-    // Default false keeps the portal working out-of-the-box against the demo
-    // portal, but you should set PUBLISH_REQUIRE_MARKER=true (and create the
-    // property in HubSpot) before real client matters live in this pipeline.
+    // OPTIONAL SECOND GATE. When true, ONLY deals whose `markerProperty` equals
+    // `markerValue` are published, so individual matters must be opted in by
+    // hand even within the Disputes pipeline. Requires a `publish_to_portal`
+    // property to exist on Deals in HubSpot — filtering on a property that does
+    // not exist makes the Search API return 400.
     requireMarker: bool('PUBLISH_REQUIRE_MARKER', false),
     markerProperty: str('PUBLISH_MARKER_PROPERTY', 'publish_to_portal'),
     markerValue: str('PUBLISH_MARKER_VALUE', 'true'),
 
-    // Whether to publish the free-text `content` field as a public description.
-    // Disable (PUBLISH_DESCRIPTIONS=false) if descriptions may contain PII.
-    includeDescriptions: bool('PUBLISH_DESCRIPTIONS', true),
+    // Whether to publish the free-text `description` as a public summary.
+    // Defaults to FALSE: on the Disputes pipeline these are internal working
+    // notes ("Need liability documentation"), not public-facing copy.
+    includeDescriptions: bool('PUBLISH_DESCRIPTIONS', false),
+
+    // Whether to publish the deal `amount` as a claimed/disputed sum.
+    // Defaults to FALSE — money figures invite misreading as judgments owed.
+    includeAmounts: bool('PUBLISH_AMOUNTS', false),
 
     // Public reference numbers are derived, never the raw HubSpot record id.
     referencePrefix: str('REFERENCE_PREFIX', 'MS'),
@@ -82,38 +94,36 @@ export const config = {
   },
 };
 
-// Fallback stage metadata for the standard Support Pipeline. The build tries to
-// fetch live stage labels from HubSpot first; this is used if that call fails
-// or when running against mock data. `state` drives badge colour/semantics.
+// Stage metadata for the Disputes pipeline, keyed by HubSpot stage id. The
+// build fetches live stage labels first; this is used if that call fails or
+// when running against mock data. `state` drives badge colour/semantics.
+//
+// The ids below are HubSpot's stock deal-stage ids, which persist after the
+// stages are renamed — hence the mismatch between id and label.
 export const FALLBACK_STAGES = {
-  '1': { label: 'Filed', state: 'open' },
-  '2': { label: 'Awaiting Response', state: 'waiting' },
-  '3': { label: 'Under Review', state: 'active' },
-  '4': { label: 'Closed', state: 'closed' },
+  appointmentscheduled: { label: 'Dispute Identified', state: 'open' },
+  qualifiedtobuy: { label: 'Communications Sent', state: 'active' },
+  presentationscheduled: { label: 'Hold', state: 'waiting' },
+  decisionmakerboughtin: { label: 'Court Active', state: 'active' },
+  contractsent: { label: 'Post Court', state: 'active' },
+  closedwon: { label: 'Closed', state: 'closed' },
+  closedlost: { label: 'Closed', state: 'closed' },
 };
 
-// Human labels for HubSpot's default ticket priority enumeration.
-export const PRIORITY_LABELS = {
-  LOW: 'Low',
-  MEDIUM: 'Medium',
-  HIGH: 'High',
-  URGENT: 'Urgent',
-};
-
-// Human labels for HubSpot's default ticket category enumeration.
-export const CATEGORY_LABELS = {
-  PRODUCT_ISSUE: 'Product',
-  BILLING_ISSUE: 'Billing',
-  FEATURE_REQUEST: 'Feature Request',
-  GENERAL_INQUIRY: 'General',
+// Stage ids whose HubSpot label is deliberately NOT shown verbatim. "Closed
+// Won"/"Closed Lost" are sales-funnel words; on a public legal record they read
+// as a claim about the outcome, so both surface as a neutral "Closed".
+export const STAGE_LABEL_OVERRIDES = {
+  closedwon: 'Closed',
+  closedlost: 'Closed',
 };
 
 // Map a raw pipeline stage label (from the live HubSpot pipeline) to a semantic
-// state used for badge styling, since custom pipelines won't match stage ids.
+// state used for badge styling, so renaming or adding stages keeps working.
 export function stateForStageLabel(label = '') {
   const l = label.toLowerCase();
-  if (l.includes('closed') || l.includes('resolved') || l.includes('settled')) return 'closed';
-  if (l.includes('waiting') || l.includes('await')) return 'waiting';
-  if (l.includes('review') || l.includes('progress') || l.includes('us')) return 'active';
+  if (/closed|resolved|settled|dismissed|withdrawn|judgment/.test(l)) return 'closed';
+  if (/hold|waiting|await|stayed|paused/.test(l)) return 'waiting';
+  if (/court|review|progress|active|sent|filed|hearing/.test(l)) return 'active';
   return 'open';
 }

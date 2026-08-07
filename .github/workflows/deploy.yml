@@ -40,13 +40,22 @@ jobs:
       - name: Build site (Doppler injects HUBSPOT_SERVICE_KEY)
         env:
           DOPPLER_TOKEN: ${{ secrets.DOPPLER_TOKEN }}
+          IS_PR: ${{ github.event_name == 'pull_request' }}
         run: |
           if [ -n "$DOPPLER_TOKEN" ]; then
             echo "Building with live HubSpot data via Doppler."
             doppler run -- node scripts/build.mjs
-          else
-            echo "::warning::DOPPLER_TOKEN not set — building from sample data."
+          elif [ "$IS_PR" = "true" ]; then
+            # Pull requests never deploy, so a credential-free build is a valid
+            # way to validate the templates against placeholder data.
+            echo "::warning::DOPPLER_TOKEN not set — building from sample data (PR validation only)."
             node scripts/build.mjs
+          else
+            # This branch WOULD have deployed. Building from mock data here
+            # would publish fictional placeholder matters to the live public
+            # site, so fail instead and leave the last good deploy in place.
+            echo "::error::DOPPLER_TOKEN is not set. Refusing to publish sample data to the live site."
+            exit 1
           fi
 
       - name: Upload Pages artifact
