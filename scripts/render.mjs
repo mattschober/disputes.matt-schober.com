@@ -80,7 +80,11 @@ export function renderPage(disputes, meta) {
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>${escapeHtml(site.brand)} — ${escapeHtml(site.title)}</title>
   <meta name="description" content="${escapeHtml(site.tagline)}" />
-  <meta name="robots" content="index, follow" />
+  <!-- This site is deliberately kept out of search results. It stays
+       public and anyone with the link reads it exactly as before; it just
+       does not get listed. See robots.txt, which allows crawling on
+       purpose so that this tag is actually read. -->
+  <meta name="robots" content="noindex, nofollow, noarchive" />
   <meta property="og:title" content="${escapeHtml(site.brand)} — ${escapeHtml(site.title)}" />
   <meta property="og:description" content="${escapeHtml(site.tagline)}" />
   <meta property="og:type" content="website" />

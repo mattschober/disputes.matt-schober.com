@@ -1,0 +1,13 @@
+# disputes.matt-schober.com is not meant to appear in search results.
+#
+# Crawling is deliberately ALLOWED. A page leaves Google's index through
+# the "noindex" meta tag, which every page built here carries (see the
+# <head> in scripts/render.mjs), and a crawler has to fetch the page to
+# read it. "Disallow" would block that fetch and leave the old listing in
+# place, so it is not used.
+#
+# Once Search Console reports the site as dropped, this can become a
+# blanket Disallow if the crawling itself is unwanted — but not before.
+
+User-agent: *
+Allow: /
